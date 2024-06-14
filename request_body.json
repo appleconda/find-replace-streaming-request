@@ -1,0 +1,18 @@
+{
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are an assistant, asnwer the questions"
+        },
+        {
+            "role": "user",
+            "content": "'Hi my name is Mark' what is the name in this sentence"
+        }
+    ],
+    "stream": true,
+    "model": "gpt-4o",
+    "temperature": 0.5,
+    "presence_penalty": 0,
+    "frequency_penalty": 0,
+    "top_p": 1
+}
