@@ -2,7 +2,7 @@ import os
 import json
 from fastapi import FastAPI, Request
 from starlette.responses import StreamingResponse
-from KMP_search import KMPSearch
+from stream_parser import KMPSearch
 import logging
 import requests
 from dotenv import load_dotenv
@@ -11,30 +11,23 @@ from dotenv import load_dotenv
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-# Initialize FastAPI app
 app = FastAPI()
 
-# Define mappings
-mappings = [["Mark", "Abdullah"]]
+mappings = [["Mark", "Jasmine"]]
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create handlers
 console_handler = logging.StreamHandler()
 file_handler = logging.FileHandler('app.log')
 
-# Set logging level
 console_handler.setLevel(logging.INFO)
 file_handler.setLevel(logging.INFO)
 
-# Create formatter and add it to handlers
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
 
-# Add handlers to the logger
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
@@ -55,6 +48,8 @@ def make_api_request(method, url, headers=None, data=None, params=None, stream=F
 
 @app.post('/v1/chat/completions')
 async def get_streaming_response(request: Request):
+    with open('app.log', 'w'):
+        pass
     request_data = await request.json()
 
     def event_stream():
@@ -64,21 +59,12 @@ async def get_streaming_response(request: Request):
             response = make_api_request('POST', api_url, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                                         data=request_data, stream=True)
             if response.status_code == 200:
-                for chunk in response.iter_content(chunk_size=1024):
-                    decoded_chunk = chunk.decode('utf-8')
-                    logger.info(f"Decoded Chunk: {decoded_chunk}")
-                    decoded_chunk = decoded_chunk[len('data:'):].strip()
-                    try:
-                        json_chunk = json.loads(decoded_chunk)
-                        content = json_chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                        if content:
-                            generator = KMPSearch(mappings, [content])
-                            for modified_content in generator:
-                                json_chunk["choices"][0]["delta"]["content"] = modified_content
-                                logger.info(f"JSON Chunk: {json_chunk}")
-                                yield f"data: {json.dumps(json_chunk)}\n\n"
-                    except json.JSONDecodeError as e:
-                        continue
+                chunk_iter = response.iter_content(chunk_size=1024)
+                for chunk in KMPSearch(mappings, chunk_iter, logger):
+                    # Decode and print the chunk for debugging purposes
+                    # decoded_chunk = chunk.decode('utf-8')
+                    # logger.info(f"[Main] Chunk yielded by KMPSearch: {decoded_chunk}")
+                    yield chunk
             else:
                 yield json.dumps({"error": "Failed to stream response"}).encode('utf-8')
                 logger.error(f"Failed to stream response with status code: {response.status_code}")
