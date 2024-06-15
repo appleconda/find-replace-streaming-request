@@ -5,11 +5,9 @@ import json
 def KMPSearch(mappings, chunks, logger):
 
     def decode_chunk(chunk):
-        decoded_chunk = (chunk.decode('utf-8').strip().split('\n\n'))[0]
         prefix = 'data: '
-        logger.info(f"[Parser] --decode_chunk-- decoded Chunk: {decoded_chunk}")
         try:
-            json_data = json.loads(decoded_chunk[len(prefix):].strip())
+            json_data = json.loads(chunk[len(prefix):].split('\n\n')[0])
             logger.info(f"[Parser] --decode_chunk-- json_data: {json_data}")
             return json_data
         except json.JSONDecodeError:
@@ -19,12 +17,12 @@ def KMPSearch(mappings, chunks, logger):
             return None
 
     def encode_chunk(chunk):
-        return f"data: {json.dumps(chunk)}\n\n".encode('utf-8')
+        return f"data: {json.dumps(chunk)}\n\n"
 
     # lps that will hold the longest prefix suffix
 
     mappings = [mapping + [[0]*len(mapping[0])] + [0] for mapping in mappings]
-    # mapping now contains list of [to_find, replace_with, lps, j]
+    # mapping now contains list of [to_find, replace_with, lpsj, j]
 
     # Preprocess the pattern (calculate lps[] array) for each mapping
     for i in range(len(mappings)):
@@ -45,7 +43,7 @@ def KMPSearch(mappings, chunks, logger):
                 yield encode_chunk(chunk_buffer.popleft()[0])
 
             # yield the last chunk
-            yield chunk
+            yield chunk 
             break
 
         chunk_buffer.append([decoded_chunk, i])

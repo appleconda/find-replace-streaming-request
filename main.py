@@ -1,7 +1,8 @@
 import os
 import json
 from fastapi import FastAPI, Request
-from starlette.responses import StreamingResponse
+from fastapi.responses import StreamingResponse
+from test import stream_processor
 from stream_parser import KMPSearch
 import logging
 import requests
@@ -53,17 +54,16 @@ async def get_streaming_response(request: Request):
     request_data = await request.json()
 
     def event_stream():
+        buffer = []
         global mappings
         api_url = f"https://api.openai.com/v1/chat/completions"
         try:
             response = make_api_request('POST', api_url, headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                                         data=request_data, stream=True)
             if response.status_code == 200:
-                chunk_iter = response.iter_content(chunk_size=1024)
+                chunk_iter = response.iter_content(chunk_size=1024, decode_unicode=True)
                 for chunk in KMPSearch(mappings, chunk_iter, logger):
-                    # Decode and print the chunk for debugging purposes
-                    # decoded_chunk = chunk.decode('utf-8')
-                    # logger.info(f"[Main] Chunk yielded by KMPSearch: {decoded_chunk}")
+                    logger.info(f"Chunk: {chunk}")
                     yield chunk
             else:
                 yield json.dumps({"error": "Failed to stream response"}).encode('utf-8')
@@ -72,7 +72,7 @@ async def get_streaming_response(request: Request):
             yield json.dumps({"error": "Failed to stream response due to an internal error"}).encode('utf-8')
             logger.error(f"Failed to stream response due to an internal error: {str(e)}")
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream())
 
 if __name__ == "__main__":
     import uvicorn
