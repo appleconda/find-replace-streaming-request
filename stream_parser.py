@@ -4,14 +4,17 @@ import json
 # Python program for KMP Algorithm
 def KMPSearch(mappings, chunks, logger):
 
+    def split_chunks(chunk):
+        return chunk.strip().split('\n\n')
+
     def decode_chunk(chunk):
         prefix = 'data: '
         try:
-            json_data = json.loads(chunk[len(prefix):].split('\n\n')[0])
-            logger.info(f"[Parser] --decode_chunk-- json_data: {json_data}")
+            json_data = json.loads(chunk[len(prefix):].strip())
+            #logger.info(f"[Parser] --decode_chunk-- json_data: {json_data}")
             return json_data
         except json.JSONDecodeError:
-            logger.info("[Parser] --decode_chunk-- Exception caught of type JSONDecodeError")
+            #logger.info("[Parser] --decode_chunk-- Exception caught of type JSONDecodeError")
             pass
         if decoded_chunk == "data: [DONE]":
             return None
@@ -30,71 +33,83 @@ def KMPSearch(mappings, chunks, logger):
 
     start_idx = 0
     keep_idx = 0
+    break_flag = 0
     i = 0
     chunk_buffer = deque()
     buffer = deque()
-    for chunk in chunks:
-
-        decoded_chunk = decode_chunk(chunk)
-        if decoded_chunk is None: # handle last chunk
-            logger.info("[Parser] decoded chunk is null")
-            # empty buffer
-            while len(chunk_buffer) > 0:
-                yield encode_chunk(chunk_buffer.popleft()[0])
-
-            # yield the last chunk
-            yield chunk 
+    for chunk_iter in chunks:
+        if break_flag == 1:
+            break_flag = 0
             break
+        for chunk in split_chunks(chunk_iter):
+            # yield chunk + "\n\n"
 
-        chunk_buffer.append([decoded_chunk, i])
-        for c in decoded_chunk["choices"][0]["delta"]["content"]:
-            buffer.append(c)
+            decoded_chunk = decode_chunk(chunk)
+            if decoded_chunk is None: # handle last chunk
+                #logger.info("[Parser] decoded chunk is null")
+                # empty buffer
+                while len(chunk_buffer) > 0:
+                    yield encode_chunk(chunk_buffer.popleft()[0])
+                    #logger.info(f"{encode_chunk(chunk_buffer.popleft()[0])}")
 
-        while i < start_idx + len(buffer):
+                # # yield the last chunk
+                logger.info(f"{chunk}")
+                yield chunk + "\n\n"
+                break_flag = 1
+                break
+            
 
-            for mp_idx in range(len(mappings)):
+            chunk_buffer.append([decoded_chunk, i])
+            for c in decoded_chunk["choices"][0]["delta"]["content"]:
+                buffer.append(c)
 
-                # bring substring match index backwards till match until it doesn't match
-                while mappings[mp_idx][3] > 0 and mappings[mp_idx][0][mappings[mp_idx][3]] != buffer[i - start_idx]:
-                    mappings[mp_idx][3] = mappings[mp_idx][2][mappings[mp_idx][3] - 1]
+            while i < start_idx + len(buffer):
 
-            found = False
-            for mp_idx in range(len(mappings)):
+                for mp_idx in range(len(mappings)):
 
-                if mappings[mp_idx][0][mappings[mp_idx][3]] == buffer[i - start_idx]:
-                    mappings[mp_idx][3] += 1
+                    # bring substring match index backwards till match until it doesn't match
+                    while mappings[mp_idx][3] > 0 and mappings[mp_idx][0][mappings[mp_idx][3]] != buffer[i - start_idx]:
+                        mappings[mp_idx][3] = mappings[mp_idx][2][mappings[mp_idx][3] - 1]
 
-                if mappings[mp_idx][3] == len(mappings[mp_idx][0]):
+                found = False
+                for mp_idx in range(len(mappings)):
 
-                    starting = i + 1 - mappings[mp_idx][3] - chunk_buffer[0][1]
-                    ending = i + 1 - chunk_buffer[-1][1]
-                    if len(chunk_buffer) == 1:
-                        chunk_buffer[0][0]["choices"][0]["delta"]["content"] = chunk_buffer[0][0]["choices"][0]["delta"]["content"][: starting] + mappings[mp_idx][1] + chunk_buffer[0][0]["choices"][0]["delta"]["content"][ending: ]
-                        chunk_buffer[0][1] += len(mappings[mp_idx][0]) - len(mappings[mp_idx][1])
-                    else:
-                        chunk_buffer[0][0]["choices"][0]["delta"]["content"] = chunk_buffer[0][0]["choices"][0]["delta"]["content"][: starting] + mappings[mp_idx][1]
-                        for ii in range(1, len(chunk_buffer) - 1):
-                            chunk_buffer[ii][0]["choices"][0]["delta"]["content"] = ''
-                        chunk_buffer[-1][1] += ending
-                        chunk_buffer[-1][0]["choices"][0]["delta"]["content"] = chunk_buffer[-1][0]["choices"][0]["delta"]["content"][ending: ]
+                    if mappings[mp_idx][0][mappings[mp_idx][3]] == buffer[i - start_idx]:
+                        mappings[mp_idx][3] += 1
 
-                    found = True
-                    break
+                    if mappings[mp_idx][3] == len(mappings[mp_idx][0]):
 
-            if found:
-                for ii in range(len(mappings)):
-                    mappings[ii][3] = 0
+                        starting = i + 1 - mappings[mp_idx][3] - chunk_buffer[0][1]
+                        ending = i + 1 - chunk_buffer[-1][1]
+                        if len(chunk_buffer) == 1:
+                            chunk_buffer[0][0]["choices"][0]["delta"]["content"] = chunk_buffer[0][0]["choices"][0]["delta"]["content"][: starting] + mappings[mp_idx][1] + chunk_buffer[0][0]["choices"][0]["delta"]["content"][ending: ]
+                            chunk_buffer[0][1] += len(mappings[mp_idx][0]) - len(mappings[mp_idx][1])
+                        else:
+                            chunk_buffer[0][0]["choices"][0]["delta"]["content"] = chunk_buffer[0][0]["choices"][0]["delta"]["content"][: starting] + mappings[mp_idx][1]
+                            for ii in range(1, len(chunk_buffer) - 1):
+                                chunk_buffer[ii][0]["choices"][0]["delta"]["content"] = ''
+                            chunk_buffer[-1][1] += ending
+                            chunk_buffer[-1][0]["choices"][0]["delta"]["content"] = chunk_buffer[-1][0]["choices"][0]["delta"]["content"][ending: ]
 
-            i += 1
+                        found = True
+                        break
 
-            keep_idx = max(0, i - max(mapping[3] for mapping in mappings))
+                if found:
+                    for ii in range(len(mappings)):
+                        mappings[ii][3] = 0
 
-        while start_idx < keep_idx and len(buffer) > 0:
-            buffer.popleft()
-            start_idx += 1
-        while len(chunk_buffer) > 0 and chunk_buffer[0][1] + len(chunk_buffer[0][0]["choices"][0]["delta"]["content"]) - 1 < keep_idx:
-            yield encode_chunk(chunk_buffer.popleft()[0])
+                i += 1
+
+                keep_idx = max(0, i - max(mapping[3] for mapping in mappings))
+
+            while start_idx < keep_idx and len(buffer) > 0:
+                buffer.popleft()
+                start_idx += 1
+            while len(chunk_buffer) > 0 and chunk_buffer[0][1] + len(chunk_buffer[0][0]["choices"][0]["delta"]["content"]) - 1 < keep_idx:
+                # logger.info(f"yielding chunk: {encode_chunk(chunk_buffer.popleft()[0])}")
+                yield encode_chunk(chunk_buffer.popleft()[0])
     while len(chunk_buffer) > 0:
+        # logger.info(f"yielding chunk: {encode_chunk(chunk_buffer.popleft()[0])}")
         yield encode_chunk(chunk_buffer.popleft()[0])
 
 def computeLPSArray(pat, M, lps):

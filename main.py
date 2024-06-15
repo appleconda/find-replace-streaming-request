@@ -47,6 +47,10 @@ def make_api_request(method, url, headers=None, data=None, params=None, stream=F
         logger.error(f"Unexpected error: {str(e)}")
         raise
 
+def test_func(chunk_iter):
+    for chunk in chunk_iter:
+        yield chunk
+
 @app.post('/v1/chat/completions')
 async def get_streaming_response(request: Request):
     with open('app.log', 'w'):
@@ -63,8 +67,10 @@ async def get_streaming_response(request: Request):
             if response.status_code == 200:
                 chunk_iter = response.iter_content(chunk_size=1024, decode_unicode=True)
                 for chunk in KMPSearch(mappings, chunk_iter, logger):
-                    logger.info(f"Chunk: {chunk}")
+                    #logger.info(f"Chunk: {chunk}")
                     yield chunk
+                # for chunk in test_func(chunk_iter):
+                #     yield chunk
             else:
                 yield json.dumps({"error": "Failed to stream response"}).encode('utf-8')
                 logger.error(f"Failed to stream response with status code: {response.status_code}")
